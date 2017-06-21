@@ -8,6 +8,8 @@
 const gulp = require('gulp');
 const fs = require('fs');
 const path = require('path');
+const cp = require('child_process');
+const os = require('os');
 const es = require('event-stream');
 const azure = require('gulp-azure-storage');
 const electron = require('gulp-atom-electron');
@@ -361,6 +363,42 @@ gulp.task('vscode-darwin-min', ['minify-vscode', 'clean-vscode-darwin'], package
 gulp.task('vscode-linux-ia32-min', ['minify-vscode', 'clean-vscode-linux-ia32'], packageTask('linux', 'ia32', { minified: true }));
 gulp.task('vscode-linux-x64-min', ['minify-vscode', 'clean-vscode-linux-x64'], packageTask('linux', 'x64', { minified: true }));
 gulp.task('vscode-linux-arm-min', ['minify-vscode', 'clean-vscode-linux-arm'], packageTask('linux', 'arm', { minified: true }));
+
+// --- v8 snapshots ---
+
+function snapshotTask(platform, arch) {
+
+	const destination = path.join(path.dirname(root), 'VSCode') + (platform ? '-' + platform : '') + (arch ? '-' + arch : '');
+	const command = path.join(process.cwd(), 'node_modules/.bin/mksnapshot');
+
+	let startupBlobFilepath;
+
+	if (platform === 'darwin') {
+		startupBlobFilepath = path.join(destination, 'Code - OSS.app/Contents/Frameworks/Electron Framework.framework/Resources/snapshot_blob.bin')
+	} else if (platform === 'windows') {
+		startupBlobFilepath = path.join(destination, 'snapshot_blob.bin')
+		// TODO
+		return () => { };
+	} else if (platform === 'linux') {
+		// TODO
+		return () => { };
+	}
+
+	return () => {
+		const inputFile = fs.readFileSync(path.join(destination, 'Code - OSS.app/Contents/Resources/app/out/vs/loader.js'));
+		const wrappedInputFile = `function Monaco_Loader() {
+			${inputFile.toString()};
+			return define;
+		}`;
+		const wrappedInputFilepath = path.join(os.tmpdir(), 'wrapped-loader.js');
+		console.log(wrappedInputFilepath);
+		fs.writeFileSync(wrappedInputFilepath, wrappedInputFile);
+
+		cp.execFileSync(command, [wrappedInputFilepath, `--startup_blob`, startupBlobFilepath]);
+	}
+}
+
+gulp.task('vscode-darwin-snapshots', ['vscode-darwin'], snapshotTask('darwin', undefined));
 
 // Transifex Localizations
 const vscodeLanguages = [

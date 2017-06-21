@@ -160,7 +160,8 @@ function main() {
 	// In the bundled version the nls plugin is packaged with the loader so the NLS Plugins
 	// loads as soon as the loader loads. To be able to have pseudo translation
 	const loaderTimer = startTimer('load:loader')
-	createScript(rootUrl + '/vs/loader.js', function () {
+
+	function onLoader() {
 		define('fs', ['original-fs'], function (originalFS) { return originalFS; }); // replace the patched electron fs with the original node fs for all AMD code
 		loaderTimer.stop();
 
@@ -211,7 +212,15 @@ function main() {
 					});
 			});
 		});
-	});
+	};
+
+	if (typeof Monaco_Loader === 'function') {
+		var ret = Monaco_Loader();
+		define = ret;
+		onLoader()
+	} else {
+		createScript(rootUrl + '/vs/loader.js', onLoader);
+	}
 }
 
 main();
