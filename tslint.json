@@ -217,7 +217,7 @@
 					"**/vs/base/parts/*/{common,browser}/**",
 					"**/vs/platform/*/{common,browser}/**",
 					"**/vs/editor/{common,browser}/**",
-					"**/vs/editor/contrib/quickOpen/**",
+					"**/vs/editor/contrib/**",
 					"**/vs/editor/standalone/{common,browser}/**"
 				]
 			},
@@ -370,6 +370,13 @@
 			{
 				"target": "**/{node,electron-browser,electron-main,extensions}/**",
 				"restrictions": "**/*"
+			},
+			{
+				"target": "**/test/smoke/**",
+				"restrictions": [
+					"**/test/smoke/**",
+					"*"
+				]
 			},
 			{
 				"target": "{**/**.test.ts,**/test/**}",

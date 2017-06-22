@@ -337,8 +337,10 @@ export class TextFileEditorModel extends BaseTextEditorModel implements ITextFil
 
 	private showTaskNotification(): void {
 		const storageKey = 'workbench.tasks.ranTaskBefore';
-		if (!this.storageService.get(storageKey) && this.contextService.getWorkspace()) {
-			const fileName = path.relative(this.contextService.getWorkspace().resource.toString(), this.resource.toString());
+		const ignoreKey = 'workbench.tasks.ignoreTaskNotification';
+		if (!this.storageService.get(ignoreKey) && !this.storageService.get(storageKey) && this.contextService.getWorkspace2()
+			&& this.contextService.getWorkspace2().roots && this.contextService.getWorkspace2().roots.length > 0) {
+			const fileName = path.relative(this.contextService.getWorkspace2().roots[0].toString(), this.resource.toString());
 			if (fileName.match(/^gruntfile\.js$/i) || fileName.match(/^gulpfile\.js$/i) || fileName.match(/^tsconfig\.json$/i)) {
 				const message = localize('taskFileOpened', `Run your {0} in VS Code. Get started here.`, fileName.split('.')[0]);
 				let action: Action;
@@ -362,13 +364,12 @@ export class TextFileEditorModel extends BaseTextEditorModel implements ITextFil
 						case 0: {
 							this.telemetryService.publicLog('taskNotificationOptionChoice',
 								{ choice: 0, test: showDocumentation });
-							this.storageService.store(storageKey, true, StorageScope.GLOBAL);
 							return action.run();
 						}
 						case 1: {
 							this.telemetryService.publicLog('taskNotificationOptionChoice',
 								{ choice: 1, test: showDocumentation });
-							return this.storageService.store(storageKey, true, StorageScope.GLOBAL);
+							return this.storageService.store(ignoreKey, true, StorageScope.GLOBAL);
 						}
 						case 2: {
 							this.telemetryService.publicLog('taskNotificationOptionChoice',
@@ -728,10 +729,8 @@ export class TextFileEditorModel extends BaseTextEditorModel implements ITextFil
 				diag(`doSave(${versionId}) - after updateContent()`, this.resource, new Date());
 
 				// Telemetry
-				if ((this.contextService.hasWorkspace() && paths.isEqualOrParent(this.resource.fsPath, this.contextService.toResource('.vscode').fsPath)) ||
-					this.resource.fsPath === this.environmentService.appSettingsPath) {
-					// Do not log write to user settings.json and .vscode folder as a filePUT event as it ruins our JSON usage data
-					this.telemetryService.publicLog('settingsWritten');
+				if (this.isSettingsFile()) {
+					this.telemetryService.publicLog('settingsWritten'); // Do not log write to user settings.json and .vscode folder as a filePUT event as it ruins our JSON usage data
 				} else {
 					this.telemetryService.publicLog('filePUT', { mimeType: guessMimeTypes(this.resource.fsPath).join(', '), ext: paths.extname(this.lastResolvedDiskStat.resource.fsPath) });
 				}
@@ -770,6 +769,23 @@ export class TextFileEditorModel extends BaseTextEditorModel implements ITextFil
 				this._onDidStateChange.fire(StateChange.SAVE_ERROR);
 			}));
 		}));
+	}
+
+	private isSettingsFile(): boolean {
+
+		// Check for global settings file
+		if (this.resource.fsPath === this.environmentService.appSettingsPath) {
+			return true;
+		}
+
+		// Check for workspace settings file
+		if (this.contextService.hasWorkspace()) {
+			return this.contextService.getWorkspace2().roots.some(root => {
+				return paths.isEqualOrParent(this.resource.fsPath, path.join(root.fsPath, '.vscode'));
+			});
+		}
+
+		return false;
 	}
 
 	private doTouch(): TPromise<void> {

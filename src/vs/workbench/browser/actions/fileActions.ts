@@ -13,6 +13,7 @@ import { ITelemetryData } from 'vs/platform/telemetry/common/telemetry';
 import { IWorkspaceContextService } from "vs/platform/workspace/common/workspace";
 import { IWorkspaceEditingService } from "vs/workbench/services/workspace/common/workspaceEditing";
 import URI from "vs/base/common/uri";
+import { IViewletService } from "vs/workbench/services/viewlet/browser/viewlet";
 
 export class OpenFolderAction extends Action {
 
@@ -50,17 +51,18 @@ export class OpenFileFolderAction extends Action {
 	}
 }
 
-export class AddFolderAction extends Action {
+export class AddRootFolderAction extends Action {
 
-	static ID = 'workbench.action.addFolder';
-	static LABEL = nls.localize('addFolder', "Add Folder...");
+	static ID = 'workbench.action.addRootFolder';
+	static LABEL = nls.localize('addFolder', "Add Root Folder...");
 
 	constructor(
 		id: string,
 		label: string,
 		@IWindowService private windowService: IWindowService,
 		@IWorkspaceContextService private contextService: IWorkspaceContextService,
-		@IWorkspaceEditingService private workspaceEditingService: IWorkspaceEditingService
+		@IWorkspaceEditingService private workspaceEditingService: IWorkspaceEditingService,
+		@IViewletService private viewletService: IViewletService
 	) {
 		super(id, label);
 	}
@@ -70,28 +72,29 @@ export class AddFolderAction extends Action {
 			return this.windowService.pickFolderAndOpen(false /* prefer same window */);
 		}
 
-		return this.windowService.pickFolder().then(folders => {
-			return this.workspaceEditingService.addRoots(folders.map(folder => URI.file(folder)));
+		return this.windowService.pickFolder({ buttonLabel: nls.localize('add', "Add"), title: nls.localize('addRootFolder', "Add Root Folder") }).then(folders => {
+			return this.workspaceEditingService.addRoots(folders.map(folder => URI.file(folder))).then(() => {
+				return this.viewletService.openViewlet(this.viewletService.getDefaultViewletId(), true);
+			});
 		});
 	}
 }
 
-export class RemoveFoldersAction extends Action {
+export class RemoveRootFolderAction extends Action {
 
-	static ID = 'workbench.action.removeFolders';
-	static LABEL = nls.localize('removeFolders', "Remove Folders");
+	static ID = 'workbench.action.removeRootFolder';
+	static LABEL = nls.localize('removeRootFolder', "Remove Root Folder");
 
 	constructor(
+		private rootUri: URI,
 		id: string,
 		label: string,
-		@IWindowService private windowService: IWindowService,
-		@IWorkspaceContextService private contextService: IWorkspaceContextService,
 		@IWorkspaceEditingService private workspaceEditingService: IWorkspaceEditingService
 	) {
 		super(id, label);
 	}
 
 	public run(): TPromise<any> {
-		return this.workspaceEditingService.clearRoots();
+		return this.workspaceEditingService.removeRoots([this.rootUri]);
 	}
 }

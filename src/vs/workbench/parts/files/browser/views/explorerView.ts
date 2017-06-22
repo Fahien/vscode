@@ -26,7 +26,7 @@ import { DiffEditorInput } from 'vs/workbench/common/editor/diffEditorInput';
 import { IEditorGroupService } from 'vs/workbench/services/group/common/groupService';
 import * as DOM from 'vs/base/browser/dom';
 import { CollapseAction } from 'vs/workbench/browser/viewlet';
-import { CollapsibleView, IViewletViewOptions } from 'vs/workbench/parts/views/browser/views';
+import { CollapsibleView, IViewletViewOptions, IViewOptions } from 'vs/workbench/parts/views/browser/views';
 import { FileStat, Model } from 'vs/workbench/parts/files/common/explorerModel';
 import { IListService } from 'vs/platform/list/browser/listService';
 import { IWorkbenchEditorService } from 'vs/workbench/services/editor/common/editorService';
@@ -101,7 +101,7 @@ export class ExplorerView extends CollapsibleView {
 		@IWorkbenchThemeService private themeService: IWorkbenchThemeService,
 		@IEnvironmentService private environmentService: IEnvironmentService
 	) {
-		super({ ...options, ariaHeaderLabel: nls.localize('explorerSection', "Files Explorer Section"), sizing: ViewSizing.Flexible }, keybindingService, contextMenuService);
+		super({ ...(options as IViewOptions), ariaHeaderLabel: nls.localize('explorerSection', "Files Explorer Section"), sizing: ViewSizing.Flexible }, keybindingService, contextMenuService);
 
 		this.settings = options.viewletSettings;
 		this.viewletState = options.viewletState;
@@ -120,9 +120,11 @@ export class ExplorerView extends CollapsibleView {
 
 	public renderHeader(container: HTMLElement): void {
 		const titleDiv = $('div.title').appendTo(container);
+		const titleSpan = $('span').appendTo(titleDiv);
 		const setHeader = () => {
-			const title = this.contextService.getWorkspace2().roots.map(root => labels.getPathLabel(root.fsPath, void 0, this.environmentService)).join();
-			$('span').text(this.name).title(title).appendTo(titleDiv);
+			const roots = this.contextService.getWorkspace2().roots;
+			const title = roots.map(root => labels.getPathLabel(root.fsPath, void 0, this.environmentService)).join();
+			titleSpan.text(roots.length === 1 ? this.name : nls.localize('folders', "Folders")).title(title);
 		};
 		this.toDispose.push(this.contextService.onDidChangeWorkspaceRoots(() => setHeader()));
 		setHeader();
@@ -237,7 +239,7 @@ export class ExplorerView extends CollapsibleView {
 		// Push down config updates to components of viewer
 		let needsRefresh = false;
 		if (this.filter) {
-			needsRefresh = this.filter.updateConfiguration(configuration);
+			needsRefresh = this.filter.updateConfiguration();
 		}
 
 		// Refresh viewer as needed
@@ -719,7 +721,7 @@ export class ExplorerView extends CollapsibleView {
 		// Load Root Stat with given target path configured
 		const promise = this.fileService.resolveFiles(targetsToResolve).then(stats => {
 			// Convert to model
-			const modelStats = stats.map((stat, index) => FileStat.create(stat, targetsToResolve[index].root.resource, targetsToResolve[index].options.resolveTo));
+			const modelStats = stats.map((stat, index) => FileStat.create(stat, targetsToResolve[index].root, targetsToResolve[index].options.resolveTo));
 			// Subsequent refresh: Merge stat into our local model and refresh tree
 			modelStats.forEach((modelStat, index) => FileStat.mergeLocalWithDisk(modelStat, this.model.roots[index]));
 
@@ -751,7 +753,7 @@ export class ExplorerView extends CollapsibleView {
 	 */
 	private getResolvedDirectories(stat: FileStat, resolvedDirectories: URI[]): void {
 		if (stat.isDirectoryResolved) {
-			if (stat.resource.toString() !== this.contextService.getWorkspace().resource.toString()) {
+			if (!stat.isRoot) {
 
 				// Drop those path which are parents of the current one
 				for (let i = resolvedDirectories.length - 1; i >= 0; i--) {
@@ -780,7 +782,7 @@ export class ExplorerView extends CollapsibleView {
 	public select(resource: URI, reveal: boolean = this.autoReveal): TPromise<void> {
 
 		// Require valid path
-		if (!resource || resource.toString() === this.contextService.getWorkspace().resource.toString()) {
+		if (!resource) {
 			return TPromise.as(null);
 		}
 
@@ -806,8 +808,8 @@ export class ExplorerView extends CollapsibleView {
 		return this.fileService.resolveFile(rootUri, options).then(stat => {
 
 			// Convert to model
-			const modelStat = FileStat.create(stat, rootUri, options.resolveTo);
 			const root = this.model.roots.filter(r => r.resource.toString() === rootUri.toString()).pop();
+			const modelStat = FileStat.create(stat, root, options.resolveTo);
 			// Update Input with disk Stat
 			FileStat.mergeLocalWithDisk(modelStat, root);
 
@@ -865,7 +867,7 @@ export class ExplorerView extends CollapsibleView {
 		// Keep list of expanded folders to restore on next load
 		if (this.isCreated) {
 			const expanded = this.explorerViewer.getExpandedElements()
-				.filter((e: FileStat) => e.resource.toString() !== this.contextService.getWorkspace().resource.toString())
+				.filter(e => e instanceof FileStat)
 				.map((e: FileStat) => e.resource.toString());
 
 			if (expanded.length) {
